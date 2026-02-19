@@ -6,6 +6,8 @@ import { trackEvent } from '@/lib/services/events-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request) {
   const config = await getRemoteConfig();
@@ -29,7 +31,11 @@ export async function GET(request: Request) {
   return NextResponse.json(config, {
     status: 200,
     headers: {
-      'cache-control': 'no-store, max-age=0'
+      'cache-control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
+      pragma: 'no-cache',
+      expires: '0',
+      'surrogate-control': 'no-store',
+      'x-config-last-updated': String(config.lastUpdated || '')
     }
   });
 }
