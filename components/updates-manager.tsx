@@ -2,6 +2,15 @@
 
 import { FormEvent, useState } from 'react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+
 type UpdateView = {
   id: string;
   platform: string;
@@ -114,125 +123,148 @@ export function UpdatesManager({ initialUpdates }: UpdatesManagerProps) {
   }
 
   return (
-    <>
-      <section className="card">
-        <h3 style={{ marginTop: 0 }}>Publicar update OTA</h3>
-        <p className="notice">
-          Sube el ZIP de `expo export` que contenga `metadata.json` y assets. Si incluye iOS + Android se publican ambos.
-        </p>
-        <form onSubmit={handleSubmit} style={{ marginTop: '0.8rem', display: 'grid', gap: '0.9rem' }}>
-          <div className="form-grid">
-            <label className="form-field">
-              <span>Canal</span>
-              <input className="input" value={channel} onChange={(event) => setChannel(event.target.value)} />
-            </label>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Publicar update OTA</CardTitle>
+          <CardDescription>
+            Sube el ZIP de `expo export` con `metadata.json` y assets. Si incluye iOS y Android, se publican ambos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="channel">Canal</Label>
+                <Input id="channel" value={channel} onChange={(event) => setChannel(event.target.value)} />
+              </div>
 
-            <label className="form-field">
-              <span>Runtime version</span>
-              <input
-                className="input"
-                value={runtimeVersion}
-                onChange={(event) => setRuntimeVersion(event.target.value)}
-                placeholder="ej: 2.0.0"
-                required
+              <div className="grid gap-2">
+                <Label htmlFor="runtime-version">Runtime version</Label>
+                <Input
+                  id="runtime-version"
+                  value={runtimeVersion}
+                  onChange={(event) => setRuntimeVersion(event.target.value)}
+                  placeholder="ej: 2.0.0"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="app-version">App version (opcional)</Label>
+                <Input
+                  id="app-version"
+                  value={appVersion}
+                  onChange={(event) => setAppVersion(event.target.value)}
+                  placeholder="ej: 2.3.1"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="archive">Paquete ZIP</Label>
+                <Input
+                  id="archive"
+                  type="file"
+                  accept=".zip,application/zip"
+                  onChange={(event) => setArchive(event.target.files?.[0] || null)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="release-message">Mensaje de release (opcional)</Label>
+              <Textarea
+                id="release-message"
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                placeholder="Descripción breve de la OTA"
+                className="min-h-[120px]"
               />
-            </label>
+            </div>
 
-            <label className="form-field">
-              <span>App version (opcional)</span>
-              <input
-                className="input"
-                value={appVersion}
-                onChange={(event) => setAppVersion(event.target.value)}
-                placeholder="ej: 2.3.1"
-              />
-            </label>
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <p className="text-sm text-muted-foreground">
+                El servidor resuelve el manifiesto por `runtime + canal + plataforma` de forma automática.
+              </p>
+              <Button type="submit" disabled={submitting} className="min-w-36">
+                {submitting ? 'Publicando…' : 'Publicar update'}
+              </Button>
+            </div>
+          </form>
 
-            <label className="form-field">
-              <span>Paquete ZIP</span>
-              <input
-                className="input"
-                type="file"
-                accept=".zip,application/zip"
-                onChange={(event) => setArchive(event.target.files?.[0] || null)}
-                required
-              />
-            </label>
-          </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-          <label className="form-field">
-            <span>Mensaje de release (opcional)</span>
-            <textarea
-              className="textarea"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Descripción breve de la OTA"
-            />
-          </label>
+          {success && (
+            <Alert>
+              <AlertTitle>Operación completada</AlertTitle>
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.8rem' }}>
-            <span className="notice">El server servirá el manifiesto automáticamente según runtime + canal + plataforma.</span>
-            <button className="primary" disabled={submitting}>
-              {submitting ? 'Publicando…' : 'Publicar update'}
-            </button>
-          </div>
-
-          {error && <p className="error">{error}</p>}
-          {success && <p className="success">{success}</p>}
-        </form>
-      </section>
-
-      <section className="card" style={{ marginTop: '0.9rem' }}>
-        <h3 style={{ marginTop: 0 }}>Historial de updates</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Plataforma</th>
-                <th>Canal</th>
-                <th>Runtime</th>
-                <th>App</th>
-                <th>Assets</th>
-                <th>Mensaje</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
+      <Card>
+        <CardHeader>
+          <CardTitle>Historial de updates</CardTitle>
+          <CardDescription>Gestiona releases publicadas y elimina las que no deban seguir disponibles.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Plataforma</TableHead>
+                <TableHead>Canal</TableHead>
+                <TableHead>Runtime</TableHead>
+                <TableHead>App</TableHead>
+                <TableHead>Assets</TableHead>
+                <TableHead>Mensaje</TableHead>
+                <TableHead>Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {updates.map((update) => (
-                <tr key={`${update.id}-${update.platform}`}>
-                  <td>{formatDate(update.createdAt)}</td>
-                  <td>
-                    <span className="badge">{update.platform}</span>
-                  </td>
-                  <td>{update.channel}</td>
-                  <td>{update.runtimeVersion}</td>
-                  <td>{update.appVersion || 'N/A'}</td>
-                  <td>{update.assetsCount}</td>
-                  <td>{update.message || 'Sin mensaje'}</td>
-                  <td>
-                    <button
+                <TableRow key={`${update.id}-${update.platform}`}>
+                  <TableCell className="whitespace-nowrap">{formatDate(update.createdAt)}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{update.platform}</Badge>
+                  </TableCell>
+                  <TableCell>{update.channel}</TableCell>
+                  <TableCell>{update.runtimeVersion}</TableCell>
+                  <TableCell>{update.appVersion || 'N/A'}</TableCell>
+                  <TableCell>{update.assetsCount}</TableCell>
+                  <TableCell className="max-w-[260px] truncate">{update.message || 'Sin mensaje'}</TableCell>
+                  <TableCell>
+                    <Button
                       type="button"
-                      className="secondary"
+                      variant="outline"
+                      size="sm"
                       onClick={() => handleDelete(update)}
                       disabled={deletingId === update.id || submitting}
                     >
                       {deletingId === update.id ? 'Eliminando…' : 'Eliminar'}
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
+
               {!updates.length && (
-                <tr>
-                  <td colSpan={8} style={{ color: 'var(--fg-soft)' }}>
+                <TableRow>
+                  <TableCell colSpan={8} className="text-muted-foreground">
                     No hay updates publicadas todavía.
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

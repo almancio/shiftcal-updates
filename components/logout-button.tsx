@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+
 export function LogoutButton() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -15,8 +17,8 @@ export function LogoutButton() {
   }
 
   return (
-    <button className="secondary" type="button" onClick={handleLogout} disabled={loading}>
+    <Button variant="outline" onClick={handleLogout} disabled={loading}>
       {loading ? 'Saliendo…' : 'Cerrar sesión'}
-    </button>
+    </Button>
   );
 }

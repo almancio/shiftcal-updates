@@ -1,4 +1,9 @@
+import { Activity, ArrowUpRight, Boxes, Cpu, Sparkles, Smartphone } from 'lucide-react';
+
 import { DashboardCharts } from '@/components/dashboard-charts';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getDashboardStats } from '@/lib/services/stats-service';
 
 function formatDate(value: string) {
@@ -15,33 +20,81 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <h2 className="page-title">Analytics + Insights</h2>
-          <p className="page-subtitle">
-            Visión consolidada de checks OTA, versiones instaladas, actividad por plataforma/canal y dispositivos
-            activos durante los últimos 30 días.
+      <header className="mb-5 rounded-xl border border-border/70 bg-gradient-to-br from-teal-100/70 via-background to-orange-100/50 p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Badge className="rounded-md px-2 py-1 text-[11px] uppercase tracking-wide">Analytics Center</Badge>
+          <Badge variant="secondary" className="rounded-md px-2 py-1 text-[11px] uppercase tracking-wide">
+            Últimos 30 días
+          </Badge>
+        </div>
+        <div className="space-y-2">
+          <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            <Sparkles className="size-5 text-primary" />
+            Visión operativa de actualizaciones OTA
+          </h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">
+            Monitoriza el estado de distribución, adopción por versiones y actividad real por dispositivo para tomar
+            decisiones de release con menos riesgo.
           </p>
         </div>
       </header>
 
-      <section className="grid-4">
-        <article className="card">
-          <p className="kpi-label">Checks OTA (30d)</p>
-          <p className="kpi-value">{stats.summary.totalChecks30d}</p>
-        </article>
-        <article className="card">
-          <p className="kpi-label">Checks OTA (24h)</p>
-          <p className="kpi-value">{stats.summary.checks24h}</p>
-        </article>
-        <article className="card">
-          <p className="kpi-label">Dispositivos únicos (30d)</p>
-          <p className="kpi-value">{stats.summary.uniqueDevices30d}</p>
-        </article>
-        <article className="card">
-          <p className="kpi-label">Updates publicadas</p>
-          <p className="kpi-value">{stats.summary.totalPublishedUpdates}</p>
-        </article>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+        <Card className="relative overflow-hidden border-teal-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Checks OTA (30d)</CardDescription>
+            <CardTitle className="text-3xl">{stats.summary.totalChecks30d}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Activity className="size-3.5" />
+              <span>Ritmo total de peticiones</span>
+            </div>
+          </CardContent>
+          <ArrowUpRight className="absolute right-3 top-3 size-4 text-teal-500" />
+        </Card>
+
+        <Card className="relative overflow-hidden border-cyan-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Checks OTA (24h)</CardDescription>
+            <CardTitle className="text-3xl">{stats.summary.checks24h}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Cpu className="size-3.5" />
+              <span>Actividad reciente</span>
+            </div>
+          </CardContent>
+          <ArrowUpRight className="absolute right-3 top-3 size-4 text-cyan-500" />
+        </Card>
+
+        <Card className="relative overflow-hidden border-indigo-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Dispositivos únicos</CardDescription>
+            <CardTitle className="text-3xl">{stats.summary.uniqueDevices30d}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Smartphone className="size-3.5" />
+              <span>Identificados en los últimos 30 días</span>
+            </div>
+          </CardContent>
+          <ArrowUpRight className="absolute right-3 top-3 size-4 text-indigo-500" />
+        </Card>
+
+        <Card className="relative overflow-hidden border-amber-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Updates publicadas</CardDescription>
+            <CardTitle className="text-3xl">{stats.summary.totalPublishedUpdates}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Boxes className="size-3.5" />
+              <span>Histórico total gestionado</span>
+            </div>
+          </CardContent>
+          <ArrowUpRight className="absolute right-3 top-3 size-4 text-amber-500" />
+        </Card>
       </section>
 
       <DashboardCharts
@@ -51,58 +104,58 @@ export default async function DashboardPage() {
         channels={stats.channels}
       />
 
-      <section className="grid-2" style={{ marginTop: '0.9rem' }}>
-        <article className="card">
-          <h3 style={{ marginTop: 0 }}>Dispositivos recientes</h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Dispositivo</th>
-                  <th>Plataforma</th>
-                  <th>App</th>
-                  <th>Runtime</th>
-                  <th>OS</th>
-                  <th>Última vez</th>
-                </tr>
-              </thead>
-              <tbody>
+      <section className="mt-4 grid grid-cols-1 gap-4 2xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Dispositivos recientes</CardTitle>
+            <CardDescription>Últimos checks OTA identificados por dispositivo.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Dispositivo</TableHead>
+                  <TableHead>Plataforma</TableHead>
+                  <TableHead>App</TableHead>
+                  <TableHead>Runtime</TableHead>
+                  <TableHead>OS</TableHead>
+                  <TableHead>Última vez</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {stats.recentDevices.map((device) => (
-                  <tr key={`${device.device}-${device.lastSeen}`}>
-                    <td>{device.device}</td>
-                    <td>{device.platform}</td>
-                    <td>{device.appVersion}</td>
-                    <td>{device.runtimeVersion}</td>
-                    <td>{device.os}</td>
-                    <td>{formatDate(device.lastSeen)}</td>
-                  </tr>
+                  <TableRow key={`${device.device}-${device.lastSeen}`}>
+                    <TableCell className="max-w-[150px] truncate">{device.device}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{device.platform}</Badge>
+                    </TableCell>
+                    <TableCell>{device.appVersion}</TableCell>
+                    <TableCell>{device.runtimeVersion}</TableCell>
+                    <TableCell>{device.os}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDate(device.lastSeen)}</TableCell>
+                  </TableRow>
                 ))}
-                {!stats.recentDevices.length && (
-                  <tr>
-                    <td colSpan={6} style={{ color: 'var(--fg-soft)' }}>
-                      Todavía no hay telemetría suficiente para mostrar dispositivos.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </article>
 
-        <article className="card">
-          <h3 style={{ marginTop: 0 }}>Integración rápida en Expo</h3>
-          <p className="notice">Configura OTA y reporta eventos custom para enriquecer insights.</p>
-          <pre
-            style={{
-              marginTop: '0.8rem',
-              background: '#0f211d',
-              color: '#dbefe7',
-              borderRadius: '12px',
-              padding: '0.8rem',
-              fontSize: '0.78rem',
-              overflowX: 'auto'
-            }}
-          >{`import * as Updates from 'expo-updates';
+                {!stats.recentDevices.length && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">
+                      Todavía no hay telemetría suficiente para mostrar dispositivos.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Integración rápida en Expo</CardTitle>
+            <CardDescription>Snippet sugerido para OTA + envío de eventos custom.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <pre className="overflow-x-auto rounded-lg bg-slate-950/95 p-4 text-xs leading-relaxed text-slate-100">
+{`import * as Updates from 'expo-updates';
 import * as Application from 'expo-application';
 import { Platform } from 'react-native';
 
@@ -126,8 +179,10 @@ export async function trackAppOpen(deviceId: string) {
       details: { name: 'app_open' }
     })
   });
-}`}</pre>
-        </article>
+}`}
+            </pre>
+          </CardContent>
+        </Card>
       </section>
     </>
   );

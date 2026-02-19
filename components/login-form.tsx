@@ -3,6 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
 export function LoginForm() {
   const router = useRouter();
   const [token, setToken] = useState('');
@@ -34,22 +39,29 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ marginTop: '1rem', display: 'grid', gap: '0.7rem' }}>
-      <label className="form-field">
-        <span>Admin token</span>
-        <input
-          className="input"
+    <form onSubmit={onSubmit} className="mt-6 grid gap-4">
+      <div className="grid gap-2">
+        <Label htmlFor="admin-token">Admin token</Label>
+        <Input
+          id="admin-token"
           type="password"
           value={token}
           onChange={(event) => setToken(event.target.value)}
           placeholder="Introduce ADMIN_TOKEN"
           required
         />
-      </label>
-      {error && <p className="error">{error}</p>}
-      <button className="primary" disabled={loading}>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <Button type="submit" disabled={loading} className="w-full">
         {loading ? 'Accediendo…' : 'Entrar al dashboard'}
-      </button>
+      </Button>
     </form>
   );
 }

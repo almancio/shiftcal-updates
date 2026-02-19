@@ -1,4 +1,10 @@
 import crypto from 'crypto';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export function sha256Base64Url(data: Buffer | string): string {
   return crypto.createHash('sha256').update(data).digest('base64url');

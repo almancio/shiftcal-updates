@@ -11,6 +11,7 @@ Panel fullstack para autohospedar `expo-updates` con:
 ## Stack elegido
 
 - `Next.js (App Router) + TypeScript`
+- `Tailwind CSS v4 + shadcn/ui`
 - `Supabase Postgres` para persistencia
 - `Recharts` para gráficas
 - `react-json-view` para editor JSON visual

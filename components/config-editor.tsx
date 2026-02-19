@@ -3,6 +3,10 @@
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
 const ReactJson = dynamic(() => import('react-json-view').then((mod) => mod.default), {
   ssr: false
 });
@@ -50,41 +54,53 @@ export function ConfigEditor({ initialConfig }: ConfigEditorProps) {
   }
 
   return (
-    <div className="card" style={{ marginTop: '0.9rem' }}>
-      <div className="page-head" style={{ marginBottom: '0.9rem' }}>
-        <div>
-          <h3 style={{ margin: 0 }}>Editor visual JSON</h3>
-          <p className="notice" style={{ marginTop: '0.4rem' }}>
-            Puedes editar cualquier clave, añadir nodos y guardar cambios sin tocar archivos manualmente.
-          </p>
+    <Card className="mt-4">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <CardTitle>Editor visual JSON</CardTitle>
+          <CardDescription>
+            Edita claves, estructura y valores de `config.json` sin tocar archivos manualmente.
+          </CardDescription>
         </div>
-        <button className="primary" type="button" onClick={saveConfig} disabled={saving}>
+        <Button onClick={saveConfig} disabled={saving} className="sm:min-w-36">
           {saving ? 'Guardando…' : 'Guardar config'}
-        </button>
-      </div>
+        </Button>
+      </CardHeader>
 
-      <div style={{ overflowX: 'auto' }}>
-        <ReactJson
-          src={draft}
-          name={false}
-          onEdit={onJsonChange}
-          onAdd={onJsonChange}
-          onDelete={onJsonChange}
-          displayDataTypes={false}
-          displayObjectSize={false}
-          enableClipboard
-          collapsed={1}
-          style={{
-            borderRadius: '14px',
-            border: '1px solid var(--line)',
-            padding: '1rem',
-            backgroundColor: '#ffffff'
-          }}
-        />
-      </div>
+      <CardContent className="space-y-4">
+        <div className="overflow-x-auto rounded-lg border border-border bg-background p-3">
+          <ReactJson
+            src={draft}
+            name={false}
+            onEdit={onJsonChange}
+            onAdd={onJsonChange}
+            onDelete={onJsonChange}
+            displayDataTypes={false}
+            displayObjectSize={false}
+            enableClipboard
+            collapsed={1}
+            style={{
+              borderRadius: '10px',
+              padding: '0.6rem',
+              backgroundColor: 'transparent'
+            }}
+          />
+        </div>
 
-      {error && <p className="error" style={{ marginTop: '0.8rem' }}>{error}</p>}
-      {success && <p className="success" style={{ marginTop: '0.8rem' }}>{success}</p>}
-    </div>
+        {error && (
+          <Alert variant="destructive">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {success && (
+          <Alert>
+            <AlertTitle>Guardado</AlertTitle>
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
   );
 }
