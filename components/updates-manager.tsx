@@ -27,6 +27,7 @@ function formatDate(value: string) {
 export function UpdatesManager({ initialUpdates }: UpdatesManagerProps) {
   const [updates, setUpdates] = useState<UpdateView[]>(initialUpdates);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -73,6 +74,43 @@ export function UpdatesManager({ initialUpdates }: UpdatesManagerProps) {
     setSubmitting(false);
     setMessage('');
     setArchive(null);
+  }
+
+  async function handleDelete(update: UpdateView) {
+    const confirmed = window.confirm(
+      `¿Eliminar esta OTA de forma permanente?\n\nPlataforma: ${update.platform}\nCanal: ${update.channel}\nRuntime: ${update.runtimeVersion}`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(update.id);
+    setError(null);
+    setSuccess(null);
+
+    const response = await fetch(`/api/admin/publish?id=${encodeURIComponent(update.id)}`, {
+      method: 'DELETE'
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setError(payload.error || 'No se pudo eliminar la update.');
+      setDeletingId(null);
+      return;
+    }
+
+    setUpdates((previous) => previous.filter((item) => item.id !== update.id));
+    const warnings = Array.isArray(payload.warnings) ? payload.warnings.filter(Boolean) : [];
+    const baseMessage = `Update eliminada. Assets borrados: ${payload.assetsDeleted ?? 0}. Eventos borrados: ${payload.eventsDeleted ?? 0}.`;
+
+    if (warnings.length) {
+      setSuccess(`${baseMessage} Avisos: ${warnings.join(' | ')}`);
+    } else {
+      setSuccess(baseMessage);
+    }
+    setDeletingId(null);
   }
 
   return (
@@ -157,6 +195,7 @@ export function UpdatesManager({ initialUpdates }: UpdatesManagerProps) {
                 <th>App</th>
                 <th>Assets</th>
                 <th>Mensaje</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -171,11 +210,21 @@ export function UpdatesManager({ initialUpdates }: UpdatesManagerProps) {
                   <td>{update.appVersion || 'N/A'}</td>
                   <td>{update.assetsCount}</td>
                   <td>{update.message || 'Sin mensaje'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => handleDelete(update)}
+                      disabled={deletingId === update.id || submitting}
+                    >
+                      {deletingId === update.id ? 'Eliminando…' : 'Eliminar'}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!updates.length && (
                 <tr>
-                  <td colSpan={7} style={{ color: 'var(--fg-soft)' }}>
+                  <td colSpan={8} style={{ color: 'var(--fg-soft)' }}>
                     No hay updates publicadas todavía.
                   </td>
                 </tr>

@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
+import { access, mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import path from 'path';
 
 import { getEnv } from '@/lib/env';
@@ -51,4 +51,20 @@ export async function readStoredAsset(filename: string): Promise<Buffer> {
   const absolutePath = path.join(dir, cleanFileName);
 
   return readFile(absolutePath);
+}
+
+export async function deleteStoredAsset(filename: string): Promise<boolean> {
+  const cleanFileName = sanitizeFileName(filename);
+  const dir = await ensureAssetDirectory();
+  const absolutePath = path.join(dir, cleanFileName);
+
+  try {
+    await unlink(absolutePath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
 }

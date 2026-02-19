@@ -25,6 +25,7 @@ Elegí este stack porque acelera desarrollo, despliegue en VPS/Dockploy y manten
 - `GET /config.json`: misma config remota con nombre de archivo explícito
 - `POST /api/events`: ingestión de eventos custom de analítica
 - `POST /api/admin/publish`: publicar ZIP exportado
+- `DELETE /api/admin/publish?id=<updateId>`: eliminar update, eventos asociados y limpiar assets huérfanos
 - `GET/PUT /api/admin/config`: leer/editar config desde dashboard
 - `POST /api/admin/session`: login admin
 

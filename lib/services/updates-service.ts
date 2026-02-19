@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import path from 'path';
 
 import { resolveContentType } from '@/lib/expo';
-import { storeImmutableAsset } from '@/lib/storage';
+import { deleteStoredAsset, storeImmutableAsset } from '@/lib/storage';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { sha256Base64Url } from '@/lib/utils';
 
@@ -302,6 +302,144 @@ export type ResolveUpdateInput = {
   currentUpdateId: string | null;
   origin: string;
 };
+
+export type DeleteUpdateResult = {
+  deleted: boolean;
+  updateId: string;
+  assetsDeleted: number;
+  eventsDeleted: number;
+  warnings: string[];
+};
+
+function extractFilenameFromAssetUrl(assetUrl: string | undefined): string | null {
+  if (!assetUrl) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(assetUrl, 'http://local.placeholder');
+    const file = parsedUrl.searchParams.get('file');
+    if (!file) {
+      return null;
+    }
+
+    return decodeURIComponent(file);
+  } catch {
+    return null;
+  }
+}
+
+function collectManifestAssetFilenames(manifest: ExpoManifest): Set<string> {
+  const fileNames = new Set<string>();
+
+  const launchAssetName = extractFilenameFromAssetUrl(manifest.launchAsset?.url);
+  if (launchAssetName) {
+    fileNames.add(launchAssetName);
+  }
+
+  for (const asset of manifest.assets || []) {
+    const fileName = extractFilenameFromAssetUrl(asset.url);
+    if (fileName) {
+      fileNames.add(fileName);
+    }
+  }
+
+  return fileNames;
+}
+
+export async function deletePublishedUpdate(updateId: string): Promise<DeleteUpdateResult> {
+  const normalizedId = updateId.trim();
+  if (!normalizedId) {
+    throw new Error('updateId is required.');
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  const { data: existing, error: existingError } = await supabase
+    .from('expo_updates')
+    .select('id,manifest')
+    .eq('id', normalizedId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(`Unable to find update: ${existingError.message}`);
+  }
+
+  if (!existing) {
+    return {
+      deleted: false,
+      updateId: normalizedId,
+      assetsDeleted: 0,
+      eventsDeleted: 0,
+      warnings: []
+    };
+  }
+
+  const manifest = existing.manifest as ExpoManifest;
+  const candidateFiles = collectManifestAssetFilenames(manifest);
+
+  const { error: deleteUpdateError } = await supabase.from('expo_updates').delete().eq('id', normalizedId);
+  if (deleteUpdateError) {
+    throw new Error(`Unable to delete update: ${deleteUpdateError.message}`);
+  }
+
+  const warnings: string[] = [];
+  let eventsDeleted = 0;
+
+  const { count: eventsDeletedCount, error: deleteEventsError } = await supabase
+    .from('expo_events')
+    .delete({ count: 'exact' })
+    .eq('update_id', normalizedId);
+
+  if (deleteEventsError) {
+    warnings.push(`Could not remove related events: ${deleteEventsError.message}`);
+  } else {
+    eventsDeleted = eventsDeletedCount || 0;
+  }
+
+  const { data: remainingUpdates, error: remainingError } = await supabase.from('expo_updates').select('manifest');
+  if (remainingError) {
+    warnings.push(`Could not verify shared assets: ${remainingError.message}`);
+  }
+
+  const referencedFiles = new Set<string>();
+  if (!remainingError) {
+    for (const row of remainingUpdates || []) {
+      if (!row?.manifest) {
+        continue;
+      }
+
+      for (const fileName of collectManifestAssetFilenames(row.manifest as ExpoManifest)) {
+        referencedFiles.add(fileName);
+      }
+    }
+  }
+
+  let assetsDeleted = 0;
+  if (!remainingError) {
+    for (const fileName of candidateFiles) {
+      if (referencedFiles.has(fileName)) {
+        continue;
+      }
+
+      try {
+        if (await deleteStoredAsset(fileName)) {
+          assetsDeleted += 1;
+        }
+      } catch (error) {
+        warnings.push(`Could not remove asset ${fileName}: ${(error as Error).message}`);
+      }
+    }
+  }
+
+  return {
+    deleted: true,
+    updateId: normalizedId,
+    assetsDeleted,
+    eventsDeleted,
+    warnings
+  };
+}
 
 export async function resolveLatestUpdate(input: ResolveUpdateInput): Promise<ExpoManifest | null> {
   const platform = normalizePlatform(input.platform);

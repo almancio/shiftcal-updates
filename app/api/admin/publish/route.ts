@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { assertAdmin } from '@/lib/auth';
-import { listPublishedUpdates, publishUpdateArchive } from '@/lib/services/updates-service';
+import { deletePublishedUpdate, listPublishedUpdates, publishUpdateArchive } from '@/lib/services/updates-service';
 
 export const runtime = 'nodejs';
 
@@ -63,5 +63,26 @@ export async function POST(request: Request) {
     ok: true,
     count: updates.length,
     updates: updates.map(toView)
+  });
+}
+
+export async function DELETE(request: Request) {
+  if (!(await assertAdmin(request))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const updateId = new URL(request.url).searchParams.get('id')?.trim() || '';
+  if (!updateId) {
+    return NextResponse.json({ error: 'id is required.' }, { status: 400 });
+  }
+
+  const result = await deletePublishedUpdate(updateId);
+  if (!result.deleted) {
+    return NextResponse.json({ error: 'Update not found.' }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    ...result
   });
 }
