@@ -39,6 +39,28 @@ function splitCsv(value: string): string[] {
     .filter(Boolean);
 }
 
+function firstNonEmptyHeader(request: Request, names: string[]): string | null {
+  for (const name of names) {
+    const value = request.headers.get(name);
+    if (value && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function inferOsNameFromPlatform(platform: string): string | null {
+  if (platform === 'ios') {
+    return 'iOS';
+  }
+  if (platform === 'android') {
+    return 'Android';
+  }
+
+  return null;
+}
+
 function parseAcceptHeader(accept: string): ParsedAcceptItem[] {
   const parts = splitCsv(accept);
 
@@ -194,20 +216,34 @@ export function parseExpoContextFromRequest(request: Request): ExpoUpdateRequest
     ? parseStructuredDictionary(expectSignatureHeader)
     : { valid: true, value: null };
 
+  const runtimeVersion = firstNonEmptyHeader(request, ['expo-runtime-version']) || '';
+  const appVersion =
+    firstNonEmptyHeader(request, [
+      'x-app-version',
+      'expo-app-version',
+      'expo-native-version',
+      'expo-version',
+      'expo-client-version'
+    ]) || runtimeVersion || null;
+  const osName =
+    firstNonEmptyHeader(request, ['x-os-name', 'expo-os-name']) || inferOsNameFromPlatform(platform);
+  const osVersion = firstNonEmptyHeader(request, ['x-os-version', 'expo-os-version']);
+  const deviceModel = firstNonEmptyHeader(request, ['x-device-model', 'expo-device-model']);
+
   return {
     protocolVersion: request.headers.get('expo-protocol-version'),
     platform,
-    runtimeVersion: request.headers.get('expo-runtime-version') || '',
+    runtimeVersion,
     channel: request.headers.get('expo-channel-name') || 'production',
     currentUpdateId: request.headers.get('expo-current-update-id'),
     expectSignatureHeader,
     expectSignature: parsedExpectSignature.value,
     expectSignatureValid: parsedExpectSignature.valid,
-    appVersion: request.headers.get('x-app-version'),
+    appVersion,
     deviceId: request.headers.get('x-device-id'),
-    osName: request.headers.get('x-os-name'),
-    osVersion: request.headers.get('x-os-version'),
-    deviceModel: request.headers.get('x-device-model')
+    osName,
+    osVersion,
+    deviceModel
   };
 }
 

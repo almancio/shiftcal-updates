@@ -163,6 +163,16 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
 
   const threshold24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+  function inferOsFallback(platform: string | null): string {
+    if (platform === 'ios') {
+      return 'iOS';
+    }
+    if (platform === 'android') {
+      return 'Android';
+    }
+    return 'unknown';
+  }
+
   function getDetails(event: EventRow): Record<string, unknown> {
     if (!event.details || typeof event.details !== 'object' || Array.isArray(event.details)) {
       return {};
@@ -223,9 +233,11 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
           latestDeviceMap.set(identity, {
             device: event.device_id || event.ip_hash?.slice(0, 10) || 'Unknown',
             platform: event.platform || 'unknown',
-            appVersion: event.app_version || 'unknown',
+            appVersion: event.app_version || event.runtime_version || 'unknown',
             runtimeVersion: event.runtime_version || 'unknown',
-            os: [event.os_name, event.os_version].filter(Boolean).join(' ') || 'unknown',
+            os:
+              [event.os_name, event.os_version].filter(Boolean).join(' ') ||
+              inferOsFallback(event.platform),
             lastSeen: event.created_at
           });
         }
@@ -296,7 +308,7 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
   ).slice(0, 6);
 
   const versionBreakdown = countByLabel(
-    updateChecks.map((event) => event.app_version),
+    updateChecks.map((event) => event.app_version || event.runtime_version),
     'unknown'
   ).slice(0, 8);
 
