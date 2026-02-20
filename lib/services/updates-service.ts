@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import path from 'path';
 
 import { resolveContentType } from '@/lib/expo';
-import { deleteStoredAsset, storeImmutableAsset } from '@/lib/storage';
+import { storeImmutableAsset } from '@/lib/storage';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { sha256Base64Url } from '@/lib/utils';
 
@@ -43,11 +43,7 @@ export type ExpoManifest = {
   runtimeVersion: string;
   launchAsset: ExpoManifestAsset;
   assets: ExpoManifestAsset[];
-  metadata: {
-    message: string | null;
-    appVersion: string | null;
-    channel: string;
-  };
+  metadata: Record<string, string>;
   extra: {
     appVersion: string | null;
     channel: string;
@@ -237,16 +233,16 @@ export async function publishUpdateArchive(input: PublishArchiveInput): Promise<
       runtimeVersion: input.runtimeVersion,
       launchAsset: {
         key: launchHash,
-        contentType: 'application/javascript',
+        contentType: resolveContentType(entry.bundle, 'application/javascript'),
         url: launchStored.relativeUrl,
         hash: launchHash,
         fileExtension: `.${launchExt}`
       },
       assets: manifestAssets,
       metadata: {
-        message: input.message || null,
-        appVersion: input.appVersion || null,
-        channel: input.channel
+        channel: input.channel,
+        ...(input.message ? { message: input.message } : {}),
+        ...(input.appVersion ? { appVersion: input.appVersion } : {})
       },
       extra: {
         appVersion: input.appVersion || null,
@@ -303,6 +299,14 @@ export type ResolveUpdateInput = {
   origin: string;
 };
 
+export type UpdateDiffLookup = {
+  id: string;
+  platform: string;
+  runtimeVersion: string;
+  channel: string;
+  launchAssetFile: string | null;
+};
+
 export type DeleteUpdateResult = {
   deleted: boolean;
   updateId: string;
@@ -310,42 +314,6 @@ export type DeleteUpdateResult = {
   eventsDeleted: number;
   warnings: string[];
 };
-
-function extractFilenameFromAssetUrl(assetUrl: string | undefined): string | null {
-  if (!assetUrl) {
-    return null;
-  }
-
-  try {
-    const parsedUrl = new URL(assetUrl, 'http://local.placeholder');
-    const file = parsedUrl.searchParams.get('file');
-    if (!file) {
-      return null;
-    }
-
-    return decodeURIComponent(file);
-  } catch {
-    return null;
-  }
-}
-
-function collectManifestAssetFilenames(manifest: ExpoManifest): Set<string> {
-  const fileNames = new Set<string>();
-
-  const launchAssetName = extractFilenameFromAssetUrl(manifest.launchAsset?.url);
-  if (launchAssetName) {
-    fileNames.add(launchAssetName);
-  }
-
-  for (const asset of manifest.assets || []) {
-    const fileName = extractFilenameFromAssetUrl(asset.url);
-    if (fileName) {
-      fileNames.add(fileName);
-    }
-  }
-
-  return fileNames;
-}
 
 export async function deletePublishedUpdate(updateId: string): Promise<DeleteUpdateResult> {
   const normalizedId = updateId.trim();
@@ -357,7 +325,7 @@ export async function deletePublishedUpdate(updateId: string): Promise<DeleteUpd
 
   const { data: existing, error: existingError } = await supabase
     .from('expo_updates')
-    .select('id,manifest')
+    .select('id')
     .eq('id', normalizedId)
     .maybeSingle();
 
@@ -374,9 +342,6 @@ export async function deletePublishedUpdate(updateId: string): Promise<DeleteUpd
       warnings: []
     };
   }
-
-  const manifest = existing.manifest as ExpoManifest;
-  const candidateFiles = collectManifestAssetFilenames(manifest);
 
   const { error: deleteUpdateError } = await supabase.from('expo_updates').delete().eq('id', normalizedId);
   if (deleteUpdateError) {
@@ -397,48 +362,68 @@ export async function deletePublishedUpdate(updateId: string): Promise<DeleteUpd
     eventsDeleted = eventsDeletedCount || 0;
   }
 
-  const { data: remainingUpdates, error: remainingError } = await supabase.from('expo_updates').select('manifest');
-  if (remainingError) {
-    warnings.push(`Could not verify shared assets: ${remainingError.message}`);
-  }
-
-  const referencedFiles = new Set<string>();
-  if (!remainingError) {
-    for (const row of remainingUpdates || []) {
-      if (!row?.manifest) {
-        continue;
-      }
-
-      for (const fileName of collectManifestAssetFilenames(row.manifest as ExpoManifest)) {
-        referencedFiles.add(fileName);
-      }
-    }
-  }
-
-  let assetsDeleted = 0;
-  if (!remainingError) {
-    for (const fileName of candidateFiles) {
-      if (referencedFiles.has(fileName)) {
-        continue;
-      }
-
-      try {
-        if (await deleteStoredAsset(fileName)) {
-          assetsDeleted += 1;
-        }
-      } catch (error) {
-        warnings.push(`Could not remove asset ${fileName}: ${(error as Error).message}`);
-      }
-    }
-  }
-
   return {
     deleted: true,
     updateId: normalizedId,
-    assetsDeleted,
+    assetsDeleted: 0,
     eventsDeleted,
-    warnings
+    warnings: [
+      ...warnings,
+      'Asset files are intentionally retained to preserve expo-updates protocol immutability.'
+    ]
   };
+}
+
+function extractStoredAssetFileFromUrl(assetUrl: string | null | undefined): string | null {
+  if (!assetUrl) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(assetUrl, 'http://localhost');
+    if (parsed.pathname !== '/api/assets') {
+      return null;
+    }
+
+    const file = parsed.searchParams.get('file');
+    return file?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getUpdatesForDiffByIds(updateIds: string[]): Promise<Map<string, UpdateDiffLookup>> {
+  const normalized = [...new Set(updateIds.map((value) => value.trim()).filter(Boolean))];
+  if (!normalized.length) {
+    return new Map();
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('expo_updates')
+    .select('id,platform,runtime_version,channel,manifest')
+    .in('id', normalized);
+
+  if (error) {
+    throw new Error(`Unable to load updates for diffing: ${error.message}`);
+  }
+
+  const result = new Map<string, UpdateDiffLookup>();
+  for (const row of data || []) {
+    const manifest = row.manifest as Partial<ExpoManifest> | null;
+    const launchAssetUrl =
+      manifest && typeof manifest === 'object' && manifest.launchAsset ? manifest.launchAsset.url : null;
+
+    result.set(row.id, {
+      id: row.id,
+      platform: row.platform,
+      runtimeVersion: row.runtime_version,
+      channel: row.channel,
+      launchAssetFile: extractStoredAssetFileFromUrl(launchAssetUrl || null)
+    });
+  }
+
+  return result;
 }
 
 export async function resolveLatestUpdate(input: ResolveUpdateInput): Promise<ExpoManifest | null> {

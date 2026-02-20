@@ -1,4 +1,4 @@
-import { Activity, ArrowUpRight, Boxes, Cpu, Sparkles, Smartphone } from 'lucide-react';
+import { Activity, ArrowUpRight, Boxes, Cpu, Download, Sparkles, Smartphone } from 'lucide-react';
 
 import { DashboardCharts } from '@/components/dashboard-charts';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,24 @@ function formatDate(value: string) {
     dateStyle: 'medium',
     timeStyle: 'short'
   });
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 B';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let amount = value;
+  let index = 0;
+
+  while (amount >= 1024 && index < units.length - 1) {
+    amount /= 1024;
+    index += 1;
+  }
+
+  const precision = index === 0 ? 0 : 2;
+  return `${amount.toLocaleString('es-ES', { maximumFractionDigits: precision })} ${units[index]}`;
 }
 
 export const dynamic = 'force-dynamic';
@@ -104,6 +122,56 @@ export default async function DashboardPage() {
         channels={stats.channels}
       />
 
+      <section className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+        <Card className="border-emerald-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Assets descargados (30d)</CardDescription>
+            <CardTitle className="text-3xl">{stats.summary.assetDownloads30d}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">Total de requests a `/api/assets`.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-cyan-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Intentos de diffing</CardDescription>
+            <CardTitle className="text-3xl">{stats.summary.patchAttempts30d}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">Requests con `A-IM: bsdiff`.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Patches servidos</CardDescription>
+            <CardTitle className="text-3xl">{stats.summary.patchServed30d}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              Fallbacks: {stats.summary.patchFallback30d} · Hit rate:{' '}
+              {stats.summary.patchAttempts30d
+                ? `${Math.round((stats.summary.patchServed30d / stats.summary.patchAttempts30d) * 100)}%`
+                : '0%'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-violet-500/25">
+          <CardHeader className="pb-3">
+            <CardDescription>Ahorro estimado por patch</CardDescription>
+            <CardTitle className="text-3xl">{formatBytes(stats.summary.patchSavedBytes30d)}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Download className="size-3.5" />
+              <span>Bytes no transferidos en 30 días.</span>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
       <section className="mt-4 grid grid-cols-1 gap-4 2xl:grid-cols-2">
         <Card>
           <CardHeader>
@@ -150,37 +218,46 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Integración rápida en Expo</CardTitle>
-            <CardDescription>Snippet sugerido para OTA + envío de eventos custom.</CardDescription>
+            <CardTitle>Estado real de bundle diffing</CardTitle>
+            <CardDescription>Últimos eventos registrados por el endpoint de assets.</CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="overflow-x-auto rounded-lg bg-slate-950/95 p-4 text-xs leading-relaxed text-slate-100">
-{`import * as Updates from 'expo-updates';
-import * as Application from 'expo-application';
-import { Platform } from 'react-native';
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Hora</TableHead>
+                  <TableHead>Modo</TableHead>
+                  <TableHead>Razón</TableHead>
+                  <TableHead>Ahorro</TableHead>
+                  <TableHead>Base → Target</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stats.recentDiffingEvents.map((event) => (
+                  <TableRow key={`${event.createdAt}-${event.file}-${event.patchReason}`}>
+                    <TableCell className="whitespace-nowrap">{formatDate(event.createdAt)}</TableCell>
+                    <TableCell>
+                      <Badge variant={event.deliveryMode === 'patch' ? 'default' : 'secondary'}>
+                        {event.deliveryMode}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-[180px] truncate">{event.patchReason}</TableCell>
+                    <TableCell>{formatBytes(event.savedBytes)}</TableCell>
+                    <TableCell className="max-w-[240px] truncate">
+                      {event.baseUpdateId} → {event.requestedUpdateId}
+                    </TableCell>
+                  </TableRow>
+                ))}
 
-export const updatesConfig = {
-  url: 'https://tu-dominio.com/api/manifest',
-  requestHeaders: {
-    'expo-channel-name': 'production'
-  }
-};
-
-export async function trackAppOpen(deviceId: string) {
-  await fetch('https://tu-dominio.com/api/events', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      eventType: 'custom',
-      platform: Platform.OS,
-      appVersion: Application.nativeApplicationVersion,
-      runtimeVersion: Updates.runtimeVersion,
-      deviceId,
-      details: { name: 'app_open' }
-    })
-  });
-}`}
-            </pre>
+                {!stats.recentDiffingEvents.length && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-muted-foreground">
+                      Aún no hay eventos de diffing. Cuando empiece a funcionar verás aquí los patches y fallbacks.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </section>

@@ -14,6 +14,7 @@ type EventRow = {
   os_version: string | null;
   device_model: string | null;
   update_id: string | null;
+  details: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -36,12 +37,20 @@ export type DashboardStats = {
     configFetches30d: number;
     uniqueDevices30d: number;
     totalPublishedUpdates: number;
+    assetDownloads30d: number;
+    patchAttempts30d: number;
+    patchServed30d: number;
+    patchFallback30d: number;
+    patchSavedBytes30d: number;
   };
   daily: Array<{
     day: string;
     checks: number;
     served: number;
     configFetches: number;
+    assetsDownloaded: number;
+    patchesServed: number;
+    patchFallbacks: number;
   }>;
   platforms: Array<{ label: string; value: number }>;
   versions: Array<{ label: string; value: number }>;
@@ -64,6 +73,18 @@ export type DashboardStats = {
     message: string;
     createdAt: string;
     assetsCount: number;
+  }>;
+  recentDiffingEvents: Array<{
+    createdAt: string;
+    file: string;
+    deliveryMode: string;
+    patchReason: string;
+    patchSource: string;
+    baseUpdateId: string;
+    requestedUpdateId: string;
+    servedBytes: number;
+    fullAssetBytes: number;
+    savedBytes: number;
   }>;
 };
 
@@ -88,7 +109,7 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
     supabase
       .from('expo_events')
       .select(
-        'event_type,platform,runtime_version,channel,app_version,device_id,ip_hash,os_name,os_version,device_model,update_id,created_at'
+        'event_type,platform,runtime_version,channel,app_version,device_id,ip_hash,os_name,os_version,device_model,update_id,details,created_at'
       )
       .gte('created_at', since.toISOString())
       .order('created_at', { ascending: true })
@@ -121,16 +142,63 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
         day,
         checks: 0,
         served: 0,
-        configFetches: 0
+        configFetches: 0,
+        assetsDownloaded: 0,
+        patchesServed: 0,
+        patchFallbacks: 0
       }
     ])
   );
 
   const uniqueDevices = new Set<string>();
   const latestDeviceMap = new Map<string, DashboardStats['recentDevices'][number]>();
+  const recentDiffingEvents: DashboardStats['recentDiffingEvents'] = [];
+
+  let assetDownloads30d = 0;
+  let patchAttempts30d = 0;
+  let patchServed30d = 0;
+  let patchFallback30d = 0;
+  let patchSavedBytes30d = 0;
   let checks24h = 0;
 
   const threshold24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  function getDetails(event: EventRow): Record<string, unknown> {
+    if (!event.details || typeof event.details !== 'object' || Array.isArray(event.details)) {
+      return {};
+    }
+
+    return event.details;
+  }
+
+  function readBoolean(details: Record<string, unknown>, key: string): boolean {
+    return details[key] === true;
+  }
+
+  function readNumber(details: Record<string, unknown>, key: string): number {
+    const value = details[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return 0;
+  }
+
+  function readString(details: Record<string, unknown>, key: string, fallback = ''): string {
+    const value = details[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+
+    return fallback;
+  }
 
   for (const event of eventRows) {
     const eventDate = new Date(event.created_at);
@@ -170,6 +238,53 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
 
     if (event.event_type === 'config_fetch' && bucket) {
       bucket.configFetches += 1;
+    }
+
+    if (event.event_type === 'asset_download') {
+      const details = getDetails(event);
+      const patchAttempted = readBoolean(details, 'patchAttempted');
+      const patchServed = readBoolean(details, 'patchServed');
+      const savedBytes = readNumber(details, 'savedBytes');
+      const servedBytes = readNumber(details, 'servedBytes');
+      const fullAssetBytes = readNumber(details, 'fullAssetBytes');
+
+      assetDownloads30d += 1;
+      patchSavedBytes30d += savedBytes;
+
+      if (bucket) {
+        bucket.assetsDownloaded += 1;
+      }
+
+      if (patchAttempted) {
+        patchAttempts30d += 1;
+      }
+
+      if (patchServed) {
+        patchServed30d += 1;
+        if (bucket) {
+          bucket.patchesServed += 1;
+        }
+      } else if (patchAttempted) {
+        patchFallback30d += 1;
+        if (bucket) {
+          bucket.patchFallbacks += 1;
+        }
+      }
+
+      if (patchAttempted || patchServed) {
+        recentDiffingEvents.push({
+          createdAt: event.created_at,
+          file: readString(details, 'file', 'unknown'),
+          deliveryMode: readString(details, 'deliveryMode', patchServed ? 'patch' : 'full'),
+          patchReason: readString(details, 'patchReason', patchServed ? 'served' : 'unknown'),
+          patchSource: readString(details, 'patchSource', '-'),
+          baseUpdateId: readString(details, 'baseUpdateId', '-'),
+          requestedUpdateId: readString(details, 'requestedUpdateId', '-'),
+          servedBytes,
+          fullAssetBytes,
+          savedBytes
+        });
+      }
     }
   }
 
@@ -217,7 +332,12 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
       updatesServed30d: eventRows.filter((event) => event.event_type === 'update_served').length,
       configFetches30d: eventRows.filter((event) => event.event_type === 'config_fetch').length,
       uniqueDevices30d: uniqueDevices.size,
-      totalPublishedUpdates: updateRows.length
+      totalPublishedUpdates: updateRows.length,
+      assetDownloads30d,
+      patchAttempts30d,
+      patchServed30d,
+      patchFallback30d,
+      patchSavedBytes30d
     },
     daily: dayKeys.map((key) => dayMap.get(key)!).filter(Boolean),
     platforms: platformBreakdown,
@@ -225,6 +345,9 @@ export async function getDashboardStats(days = 30): Promise<DashboardStats> {
     runtimes: runtimeBreakdown,
     channels: channelBreakdown,
     recentDevices: latestDevices,
-    latestUpdates
+    latestUpdates,
+    recentDiffingEvents: recentDiffingEvents
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 12)
   };
 }

@@ -32,6 +32,9 @@ type DailyPoint = {
   checks: number;
   served: number;
   configFetches: number;
+  assetsDownloaded: number;
+  patchesServed: number;
+  patchFallbacks: number;
 };
 
 type LabelValuePoint = {
@@ -68,6 +71,17 @@ const channelsConfig = {
   }
 } satisfies ChartConfig;
 
+const diffingConfig = {
+  fullAssets: {
+    label: 'Asset completo',
+    color: 'hsl(var(--chart-3))'
+  },
+  patchesServed: {
+    label: 'Patch bsdiff',
+    color: 'hsl(var(--chart-2))'
+  }
+} satisfies ChartConfig;
+
 const piePalette = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -87,6 +101,11 @@ export function DashboardCharts({ daily, platforms, versions, channels }: Dashbo
   const platformTotal = platforms.reduce((acc, item) => acc + item.value, 0);
   const versionsData = versions.map((item) => ({ name: item.label, count: item.value }));
   const channelsData = channels.map((item) => ({ channel: item.label, checks: item.value }));
+  const diffingData = daily.map((item) => ({
+    day: item.day,
+    patchesServed: item.patchesServed,
+    fullAssets: Math.max(item.assetsDownloaded - item.patchesServed, 0)
+  }));
 
   return (
     <>
@@ -183,7 +202,32 @@ export function DashboardCharts({ daily, platforms, versions, channels }: Dashbo
         </Card>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 2xl:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-4 2xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Entrega de assets: patch vs completo</CardTitle>
+            <CardDescription>Comprueba cuándo el servidor está sirviendo bsdiff realmente.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={diffingConfig} className="h-[300px] w-full">
+              <BarChart data={diffingData} margin={{ left: 12, right: 12 }}>
+                <CartesianGrid vertical={false} strokeDasharray="4 4" />
+                <XAxis
+                  dataKey="day"
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value: string) => value.slice(5)}
+                />
+                <YAxis tickLine={false} axisLine={false} width={34} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="patchesServed" stackId="delivery" fill="var(--color-patchesServed)" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="fullAssets" stackId="delivery" fill="var(--color-fullAssets)" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Versiones de app más activas</CardTitle>

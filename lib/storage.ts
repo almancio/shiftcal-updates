@@ -18,10 +18,23 @@ function getAssetDirectory() {
   return path.resolve(process.cwd(), STORAGE_DIR, 'assets');
 }
 
+function getDiffDirectory() {
+  const { STORAGE_DIR } = getEnv();
+  return path.resolve(process.cwd(), STORAGE_DIR, 'update-diffs');
+}
+
 async function ensureAssetDirectory() {
   const dir = getAssetDirectory();
   await mkdir(dir, { recursive: true });
   return dir;
+}
+
+function sanitizeUpdateId(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[a-zA-Z0-9._-]+$/.test(trimmed)) {
+    throw new Error('Invalid update id');
+  }
+  return trimmed;
 }
 
 export async function storeImmutableAsset(buffer: Buffer, extension?: string) {
@@ -45,11 +58,14 @@ export async function storeImmutableAsset(buffer: Buffer, extension?: string) {
   };
 }
 
-export async function readStoredAsset(filename: string): Promise<Buffer> {
+export async function resolveStoredAssetPath(filename: string): Promise<string> {
   const cleanFileName = sanitizeFileName(filename);
   const dir = await ensureAssetDirectory();
-  const absolutePath = path.join(dir, cleanFileName);
+  return path.join(dir, cleanFileName);
+}
 
+export async function readStoredAsset(filename: string): Promise<Buffer> {
+  const absolutePath = await resolveStoredAssetPath(filename);
   return readFile(absolutePath);
 }
 
@@ -67,4 +83,13 @@ export async function deleteStoredAsset(filename: string): Promise<boolean> {
     }
     throw error;
   }
+}
+
+export async function resolveStoredPatchPath(baseUpdateId: string, requestedUpdateId: string): Promise<string> {
+  const safeBaseUpdateId = sanitizeUpdateId(baseUpdateId);
+  const safeRequestedUpdateId = sanitizeUpdateId(requestedUpdateId);
+  const diffDir = getDiffDirectory();
+  const patchDirectory = path.join(diffDir, safeBaseUpdateId);
+  await mkdir(patchDirectory, { recursive: true });
+  return path.join(patchDirectory, `${safeRequestedUpdateId}.bsdiff`);
 }

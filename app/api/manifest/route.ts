@@ -4,7 +4,9 @@ import {
   expoResponseHeaders,
   getRequestIp,
   hashIp,
+  isSupportedExpoPlatform,
   maybeSignManifest,
+  negotiateManifestContentType,
   parseExpoContextFromRequest
 } from '@/lib/expo';
 import { trackEvent } from '@/lib/services/events-service';
@@ -18,10 +20,38 @@ export async function GET(request: Request) {
   const context = parseExpoContextFromRequest(request);
   const ipHash = hashIp(getRequestIp(request));
 
+  if (context.protocolVersion && context.protocolVersion !== '1') {
+    return NextResponse.json(
+      { error: `Unsupported expo-protocol-version: ${context.protocolVersion}` },
+      { status: 406 }
+    );
+  }
+
   if (!context.runtimeVersion || !context.platform) {
     return NextResponse.json(
       { error: 'Missing expo-runtime-version or expo-platform headers.' },
       { status: 400 }
+    );
+  }
+
+  if (!isSupportedExpoPlatform(context.platform)) {
+    return NextResponse.json(
+      { error: `Unsupported expo-platform: ${context.platform}. Use ios or android.` },
+      { status: 400 }
+    );
+  }
+
+  if (context.expectSignatureHeader && !context.expectSignatureValid) {
+    return NextResponse.json({ error: 'Invalid expo-expect-signature header format.' }, { status: 400 });
+  }
+
+  const negotiatedContentType = negotiateManifestContentType(request);
+  if (!negotiatedContentType) {
+    return NextResponse.json(
+      {
+        error: 'Not acceptable. Supported manifest content types: application/expo+json, application/json.'
+      },
+      { status: 406 }
     );
   }
 
@@ -52,7 +82,17 @@ export async function GET(request: Request) {
     origin
   });
 
-  const headers = expoResponseHeaders();
+  const headers = expoResponseHeaders({
+    vary: [
+      'accept',
+      'expo-protocol-version',
+      'expo-platform',
+      'expo-runtime-version',
+      'expo-channel-name',
+      'expo-current-update-id',
+      'expo-expect-signature'
+    ]
+  });
 
   if (!manifest) {
     await trackEvent({
@@ -79,15 +119,24 @@ export async function GET(request: Request) {
   }
 
   const payload = JSON.stringify(manifest);
-  const signature = maybeSignManifest(payload, Boolean(context.expectSignature));
+  const expectedKeyId =
+    typeof context.expectSignature?.keyid === 'string' ? context.expectSignature.keyid : null;
+  const expectedAlg = typeof context.expectSignature?.alg === 'string' ? context.expectSignature.alg : null;
+  const signatureResult = maybeSignManifest(payload, {
+    shouldSign: Boolean(context.expectSignatureHeader),
+    expectedKeyId,
+    expectedAlg
+  });
+  const signature = signatureResult.signature;
 
-  if (context.expectSignature && !signature) {
+  if (context.expectSignatureHeader && !signature) {
+    const reason = signatureResult.reason || 'unknown';
+    const status = reason === 'algorithm_mismatch' || reason === 'key_id_mismatch' ? 406 : 500;
     return NextResponse.json(
       {
-        error:
-          'Client requested signed manifest but EXPO_PRIVATE_KEY_PEM is missing or invalid on server.'
+        error: `Unable to produce signed manifest (${reason}).`
       },
-      { status: 500 }
+      { status }
     );
   }
 
@@ -113,7 +162,7 @@ export async function GET(request: Request) {
     status: 200,
     headers: {
       ...headers,
-      'content-type': 'application/expo+json; charset=utf-8',
+      'content-type': `${negotiatedContentType}; charset=utf-8`,
       ...(signature ? { 'expo-signature': signature } : {})
     }
   });

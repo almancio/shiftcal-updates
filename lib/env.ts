@@ -10,7 +10,8 @@ const envSchema = z.object({
   STORAGE_DIR: z.string().min(1).default('./storage'),
   EXPO_PRIVATE_KEY_PEM: z.string().optional(),
   EXPO_CODE_SIGN_KEY_ID: z.string().min(1).default('main'),
-  EXPO_CODE_SIGN_ALG: z.string().min(1).default('rsa-v1_5-sha256')
+  EXPO_CODE_SIGN_ALG: z.string().min(1).default('rsa-v1_5-sha256'),
+  BSDIFF_BINARY: z.string().min(1).default('bsdiff')
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
